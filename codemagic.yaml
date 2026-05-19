@@ -23,7 +23,14 @@ workflows:
 
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-          xcodebuild -project "$XCODEPROJ" -scheme "$SCHEME" -configuration Release build
+          xcodebuild \
+            -project "$XCODEPROJ" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
 
     artifacts:
       - build/**/*.app
