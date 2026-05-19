@@ -10,16 +10,20 @@ workflows:
       - name: Show project files
         script: ls -R
 
-      - name: Build iOS project
+      - name: Detect and build iOS project
         script: |
           cd ios
-          
-          # find project type automatically
+
           if ls *.xcworkspace 1> /dev/null 2>&1; then
-            xcodebuild -workspace *.xcworkspace -scheme * -configuration Release build
+            PROJECT=$(ls *.xcworkspace)
+            SCHEME=${PROJECT%%.xcworkspace}
+            xcodebuild -workspace "$PROJECT" -scheme "$SCHEME" -configuration Release build
           else
-            xcodebuild -project *.xcodeproj -scheme * -configuration Release build
+            PROJECT=$(ls *.xcodeproj)
+            SCHEME=${PROJECT%%.xcodeproj}
+            xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Release build
           fi
 
     artifacts:
       - build/**/*.app
+      - build/**/*.ipa
