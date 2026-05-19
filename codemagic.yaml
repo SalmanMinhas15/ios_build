@@ -35,4 +35,4 @@ workflows:
     artifacts:
       - build/ios/ipa/*.ipa
       - /Users/builder/clone/ios/ipa/*.ipa
-      - *.ipa
+      - "*.ipa"
