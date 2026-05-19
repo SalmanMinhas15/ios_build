@@ -1,29 +1,14 @@
-workflows:
-  ios-build:
-    name: Godot iOS Build
-    max_build_duration: 60
+- name: Detect and build iOS project
+  script: |
+    cd ios
 
-    environment:
-      xcode: latest
+    XCODEPROJ=$(find . -maxdepth 2 -name "*.xcodeproj" | head -n 1)
+    WORKSPACE=$(find . -maxdepth 2 -name "*.xcworkspace" | head -n 1)
 
-    scripts:
-      - name: Show project files
-        script: ls -R
-
-      - name: Detect and build iOS project
-        script: |
-          cd ios
-
-          if ls *.xcworkspace 1> /dev/null 2>&1; then
-            PROJECT=$(ls *.xcworkspace)
-            SCHEME=${PROJECT%%.xcworkspace}
-            xcodebuild -workspace "$PROJECT" -scheme "$SCHEME" -configuration Release build
-          else
-            PROJECT=$(ls *.xcodeproj)
-            SCHEME=${PROJECT%%.xcodeproj}
-            xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Release build
-          fi
-
-    artifacts:
-      - build/**/*.app
-      - build/**/*.ipa
+    if [ -n "$WORKSPACE" ]; then
+      SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+      xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration Release build
+    else
+      SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
+      xcodebuild -project "$XCODEPROJ" -scheme "$SCHEME" -configuration Release build
+    fi
