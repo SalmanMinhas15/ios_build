@@ -33,5 +33,6 @@ workflows:
             build
 
     artifacts:
-      - build/**/*.app
-      - build/**/*.ipa
+      - build/ios/ipa/*.ipa
+      - /Users/builder/clone/ios/ipa/*.ipa
+      - *.ipa
