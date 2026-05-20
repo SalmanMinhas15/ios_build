@@ -23,6 +23,7 @@ workflows:
 
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
+          # 1. Compile the .app bundle to our specific output directory
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
@@ -30,9 +31,16 @@ workflows:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
+            CONFIGURATION_BUILD_DIR="$CM_BUILD_DIR/output" \
             build
 
+          # 2. Package the .app into a standard iOS .ipa container layout
+          cd "$CM_BUILD_DIR"
+          mkdir -p Payload
+          cp -r output/*.app Payload/
+          zip -r GodotGame.ipa Payload
+          rm -rf Payload
+
+    # 3. Direct Codemagic to collect your new .ipa file
     artifacts:
-      - "$HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app"
-      - "**/output/*.app"
-      - "**/*.app"
+      - "*.ipa"
