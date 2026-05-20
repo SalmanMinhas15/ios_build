@@ -33,6 +33,6 @@ workflows:
             build
 
     artifacts:
-      - build/ios/ipa/*.ipa
-      - /Users/builder/clone/ios/ipa/*.ipa
-      - "*.ipa"
+      - "$HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app"
+      - "**/output/*.app"
+      - "**/*.app"
