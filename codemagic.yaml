@@ -1,46 +1,25 @@
-workflows:
-  ios-build:
-    name: Godot iOS Production Build
-    max_build_duration: 60
+scripts:
+  - name: Build iOS Signed IPA
+    script: |
+      cd ios
 
-    environment:
-      xcode: latest
+      XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
+      SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-    scripts:
-      - name: Show files
-        script: ls -R ios
+      xcodebuild \
+        -project "$XCODEPROJ" \
+        -scheme "$SCHEME" \
+        -configuration Release \
+        -destination generic/platform=iOS \
+        CODE_SIGN_STYLE=Manual \
+        CODE_SIGN_IDENTITY="Apple Distribution" \
+        -archivePath $CM_BUILD_DIR/build/App.xcarchive \
+        archive
 
-      - name: Build iOS project (SIGNED)
-        script: |
-          cd ios
+      xcodebuild -exportArchive \
+        -archivePath $CM_BUILD_DIR/build/App.xcarchive \
+        -exportPath $CM_BUILD_DIR/build/ipa \
+        -exportOptionsPlist ios/pruduction_build/ExportOptions.plist
 
-          XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
-
-          if [ -z "$XCODEPROJ" ]; then
-            echo "No xcodeproj found"
-            exit 1
-          fi
-
-          SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
-
-          xcodebuild clean \
-            -project "$XCODEPROJ" \
-            -scheme "$SCHEME" \
-            -configuration Release
-
-          xcodebuild \
-            -project "$XCODEPROJ" \
-            -scheme "$SCHEME" \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath "$CM_BUILD_DIR/build/app.xcarchive" \
-            archive
-
-          xcodebuild \
-            -exportArchive \
-            -archivePath "$CM_BUILD_DIR/build/app.xcarchive" \
-            -exportPath "$CM_BUILD_DIR/output" \
-            -exportOptionsPlist ExportOptions.plist
-
-    artifacts:
-      - output/*.ipa
+artifacts:
+  - build/ipa/*.ipa
