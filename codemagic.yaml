@@ -1,20 +1,26 @@
 workflows:
-  ios-production:
-    name: iOS Production Build
+  ios-build:
+    name: Godot iOS Signed Build
     max_build_duration: 90
 
     environment:
       xcode: latest
 
     scripts:
-      - name: Show project files
+      - name: Show files
         script: ls -R ios
 
-      - name: Build + Archive iOS App
+      - name: Build iOS project (SIGNED)
         script: |
           cd ios
 
           XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
+
+          if [ -z "$XCODEPROJ" ]; then
+            echo "No xcodeproj found"
+            exit 1
+          fi
+
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
           echo "Project: $XCODEPROJ"
@@ -23,7 +29,7 @@ workflows:
           # CLEAN
           xcodebuild clean
 
-          # ARCHIVE (SIGNED)
+          # ARCHIVE (SIGNED BUILD)
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
