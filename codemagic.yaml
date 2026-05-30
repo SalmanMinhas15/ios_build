@@ -8,7 +8,7 @@ workflows:
 
     scripts:
       - name: Show files
-        script: ls -R ios
+        script: ls -R
 
       - name: Build iOS project (SIGNED)
         script: |
@@ -29,12 +29,13 @@ workflows:
           # CLEAN
           xcodebuild clean
 
-          # ARCHIVE (SIGNED BUILD)
+          # ARCHIVE
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
             -configuration Release \
             -destination generic/platform=iOS \
+            CODE_SIGN_STYLE=Automatic \
             -archivePath $CM_BUILD_DIR/build/App.xcarchive \
             archive
 
@@ -43,7 +44,7 @@ workflows:
           xcodebuild -exportArchive \
             -archivePath $CM_BUILD_DIR/build/App.xcarchive \
             -exportPath $CM_BUILD_DIR/build/ipa \
-            -exportOptionsPlist ../ExportOptions.plist
+            -exportOptionsPlist $CM_BUILD_DIR/ExportOptions.plist
 
     artifacts:
       - build/ipa/*.ipa
