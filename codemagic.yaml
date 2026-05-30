@@ -1,6 +1,6 @@
 workflows:
   ios-build:
-    name: Godot iOS Build
+    name: Godot iOS Production Build
     max_build_duration: 60
 
     environment:
@@ -10,7 +10,7 @@ workflows:
       - name: Show files
         script: ls -R ios
 
-      - name: Build iOS project
+      - name: Build iOS project (SIGNED)
         script: |
           cd ios
 
@@ -23,24 +23,24 @@ workflows:
 
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-          # 1. Compile the .app bundle to our specific output directory
+          xcodebuild clean \
+            -project "$XCODEPROJ" \
+            -scheme "$SCHEME" \
+            -configuration Release
+
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
             -configuration Release \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            CONFIGURATION_BUILD_DIR="$CM_BUILD_DIR/output" \
-            build
+            -destination 'generic/platform=iOS' \
+            -archivePath "$CM_BUILD_DIR/build/app.xcarchive" \
+            archive
 
-          # 2. Package the .app into a standard iOS .ipa container layout
-          cd "$CM_BUILD_DIR"
-          mkdir -p Payload
-          cp -r output/*.app Payload/
-          zip -r GodotGame.ipa Payload
-          rm -rf Payload
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$CM_BUILD_DIR/build/app.xcarchive" \
+            -exportPath "$CM_BUILD_DIR/output" \
+            -exportOptionsPlist ExportOptions.plist
 
-    # 3. Direct Codemagic to collect your new .ipa file
     artifacts:
-      - "*.ipa"
+      - output/*.ipa
