@@ -13,6 +13,7 @@ scripts:
         -destination generic/platform=iOS \
         CODE_SIGN_STYLE=Automatic \
         CODE_SIGN_IDENTITY="Apple Distribution" \
+        PROVISIONING_PROFILE_SPECIFIER="provisioning_file"
         -archivePath $CM_BUILD_DIR/build/App.xcarchive \
         archive
 
