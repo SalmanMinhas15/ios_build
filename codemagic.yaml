@@ -21,11 +21,31 @@ workflows:
           echo "SCHEME=$SCHEME" >> $CM_ENV
           echo "Found project: $XCODEPROJ, scheme: $SCHEME"
 
-      - name: Set code signing settings
+      - name: Fix signing in pbxproj
         script: |
           cd ios
-          # Inject the provisioning profile and certificate into the Xcode project
-          xcode-project use-profiles
+          PBXPROJ="$XCODEPROJ/project.pbxproj"
+          echo "Patching: $PBXPROJ"
+
+          # Force manual signing style
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$PBXPROJ"
+
+          # Set correct team ID
+          sed -i '' "s/DEVELOPMENT_TEAM = \"\";/DEVELOPMENT_TEAM = $TEAM_ID;/g" "$PBXPROJ"
+          sed -i '' "s/DEVELOPMENT_TEAM = [A-Z0-9]*;/DEVELOPMENT_TEAM = $TEAM_ID;/g" "$PBXPROJ"
+
+          # Set bundle ID
+          sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER = .*;/PRODUCT_BUNDLE_IDENTIFIER = $BUNDLE_ID;/g" "$PBXPROJ"
+
+          # Set provisioning profile specifier
+          sed -i '' "s/PROVISIONING_PROFILE_SPECIFIER = .*;/PROVISIONING_PROFILE_SPECIFIER = \"$CM_PROVISIONING_PROFILE\";/g" "$PBXPROJ"
+
+          # If no PROVISIONING_PROFILE_SPECIFIER line exists at all, add it
+          grep -q "PROVISIONING_PROFILE_SPECIFIER" "$PBXPROJ" || \
+            sed -i '' "s/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Manual;\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"$CM_PROVISIONING_PROFILE\";/g" "$PBXPROJ"
+
+          echo "=== Verifying patch ==="
+          grep -E "CODE_SIGN_STYLE|DEVELOPMENT_TEAM|PROVISIONING_PROFILE|PRODUCT_BUNDLE_IDENTIFIER" "$PBXPROJ"
 
       - name: Clean and Archive iOS app
         script: |
@@ -71,6 +91,8 @@ workflows:
           </dict>
           </plist>
           EOF
+          echo "--- ExportOptions.plist ---"
+          cat $CM_BUILD_DIR/ExportOptions.plist
 
       - name: Export IPA
         script: |
