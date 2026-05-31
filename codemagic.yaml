@@ -1,43 +1,35 @@
 workflows:
   ios-build:
-    name: Godot iOS Signed Build
+    name: Godot iOS Build (No ASC)
     max_build_duration: 120
+
     environment:
       xcode: 16.3
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.kickupkings.kickupkings
       vars:
         BUNDLE_ID: "com.kickupkings.kickupkings"
         TEAM_ID: "9WY9B7WP2D"
 
-    integrations:
-      app_store_connect: kickupkings  # name you gave it in dashboard
-
     scripts:
-      - name: Find Xcode project and set env vars
+
+      - name: Locate Xcode project
         script: |
           cd ios
           XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
-          echo "Project: $XCODEPROJ"
-          echo "Scheme:  $SCHEME"
-          echo "XCODEPROJ=$XCODEPROJ" >> $CM_ENV
-          echo "SCHEME=$SCHEME"       >> $CM_ENV
 
-      - name: Clean and Archive iOS app
+          echo "XCODEPROJ=$XCODEPROJ" >> $CM_ENV
+          echo "SCHEME=$SCHEME" >> $CM_ENV
+
+      - name: Clean & Archive
         script: |
           cd ios
+
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
             -configuration Release \
             -destination "generic/platform=iOS" \
             -allowProvisioningUpdates \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="$CM_PROVISIONING_PROFILE" \
-            DEVELOPMENT_TEAM="$TEAM_ID" \
             clean archive \
             -archivePath "$CM_BUILD_DIR/App.xcarchive"
 
@@ -46,33 +38,23 @@ workflows:
           cat > $CM_BUILD_DIR/ExportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-            "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
               <key>method</key>
-              <string>app-store-connect</string>
-              <key>signingStyle</key>
-              <string>manual</string>
+              <string>app-store</string>
+
               <key>teamID</key>
               <string>$TEAM_ID</string>
-              <key>signingCertificate</key>
-              <string>Apple Distribution</string>
-              <key>provisioningProfiles</key>
-              <dict>
-                  <key>$BUNDLE_ID</key>
-                  <string>$CM_PROVISIONING_PROFILE</string>
-              </dict>
+
+              <key>signingStyle</key>
+              <string>automatic</string>
+
               <key>compileBitcode</key>
               <false/>
-              <key>uploadSymbols</key>
-              <true/>
-              <key>stripSwiftSymbols</key>
-              <true/>
           </dict>
           </plist>
           EOF
-          echo "--- ExportOptions.plist ---"
-          cat $CM_BUILD_DIR/ExportOptions.plist
 
       - name: Export IPA
         script: |
@@ -84,8 +66,3 @@ workflows:
     artifacts:
       - $CM_BUILD_DIR/ipa/*.ipa
       - $CM_BUILD_DIR/App.xcarchive
-
-    publishing:
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: true
