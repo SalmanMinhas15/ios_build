@@ -38,11 +38,7 @@ workflows:
             archive
 
       - name: Export IPA
-        script: |
-          xcodebuild -exportArchive \
-            -archivePath "$CM_BUILD_DIR/build/App.xcarchive" \
-            -exportPath "$CM_BUILD_DIR/build/ipa" \
-            -exportOptionsPlist "$CM_BUILD_DIR/ExportOptions.plist"
+        script: echo "Codemagic will auto export IPA"
 
     artifacts:
       - build/ipa/*.ipa
