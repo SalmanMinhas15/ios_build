@@ -5,35 +5,23 @@ workflows:
 
     environment:
       xcode: 16.3
-      vars:
-        BUNDLE_ID: "com.kickupkings.kickupkings"
-        SCHEME: "pruduction_build"
 
     scripts:
-
-      - name: Find project safely
+      - name: Set up paths
         script: |
           cd ios
           XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
+          echo $XCODEPROJ
 
-          if [ -z "$XCODEPROJ" ]; then
-            echo "❌ No xcodeproj found"
-            exit 1
-          fi
-
-          echo "Project found: $XCODEPROJ"
-          echo "$XCODEPROJ" > project.txt
-
-      - name: Archive iOS app
+      - name: Build Archive
         script: |
           cd ios
 
-          XCODEPROJ=$(cat project.txt)
+          XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
+          SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-          echo "Using project: $XCODEPROJ"
+          echo "Project: $XCODEPROJ"
           echo "Scheme: $SCHEME"
-
-          xcodebuild clean
 
           xcodebuild \
             -project "$XCODEPROJ" \
@@ -42,12 +30,10 @@ workflows:
             -destination generic/platform=iOS \
             -allowProvisioningUpdates \
             clean archive \
-            -archivePath "$CM_BUILD_DIR/build/App.xcarchive"
+            -archivePath $CM_BUILD_DIR/build/App.xcarchive
 
       - name: Create ExportOptions.plist
         script: |
-          mkdir -p $CM_BUILD_DIR/build
-
           cat > $CM_BUILD_DIR/ExportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -56,11 +42,11 @@ workflows:
               <key>method</key>
               <string>app-store-connect</string>
 
-              <key>signingStyle</key>
-              <string>automatic</string>
-
               <key>teamID</key>
               <string>9WY9B7WP2D</string>
+
+              <key>signingStyle</key>
+              <string>automatic</string>
 
               <key>compileBitcode</key>
               <false/>
@@ -71,10 +57,9 @@ workflows:
       - name: Export IPA
         script: |
           xcodebuild -exportArchive \
-            -archivePath "$CM_BUILD_DIR/build/App.xcarchive" \
-            -exportOptionsPlist "$CM_BUILD_DIR/ExportOptions.plist" \
-            -exportPath "$CM_BUILD_DIR/build/ipa"
+            -archivePath $CM_BUILD_DIR/build/App.xcarchive \
+            -exportOptionsPlist $CM_BUILD_DIR/ExportOptions.plist \
+            -exportPath $CM_BUILD_DIR/build/ipa
 
     artifacts:
-      - build/ipa/**/*.ipa
-      - build/*.xcarchive
+      - build/ipa/*.ipa
