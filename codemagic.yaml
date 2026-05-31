@@ -7,10 +7,10 @@ workflows:
       xcode: latest
 
     scripts:
-      - name: Show files
+      - name: Show project files
         script: ls -R
 
-      - name: Build iOS project (SIGNED)
+      - name: Build iOS project (Archive)
         script: |
           cd ios
 
@@ -26,25 +26,23 @@ workflows:
           echo "Project: $XCODEPROJ"
           echo "Scheme: $SCHEME"
 
-          # CLEAN
           xcodebuild clean
 
-          # ARCHIVE
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
             -configuration Release \
             -destination generic/platform=iOS \
-            # CODE_SIGN_STYLE=Automatic \
-            -archivePath $CM_BUILD_DIR/build/App.xcarchive \
+            -allowProvisioningUpdates \
+            -archivePath "$CM_BUILD_DIR/build/App.xcarchive" \
             archive
 
       - name: Export IPA
         script: |
           xcodebuild -exportArchive \
-            -archivePath $CM_BUILD_DIR/build/App.xcarchive \
-            -exportPath $CM_BUILD_DIR/build/ipa \
-            -exportOptionsPlist $CM_BUILD_DIR/ExportOptions.plist
+            -archivePath "$CM_BUILD_DIR/build/App.xcarchive" \
+            -exportPath "$CM_BUILD_DIR/build/ipa" \
+            -exportOptionsPlist "$CM_BUILD_DIR/ExportOptions.plist"
 
     artifacts:
       - build/ipa/*.ipa
