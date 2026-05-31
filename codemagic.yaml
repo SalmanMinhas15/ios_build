@@ -20,18 +20,17 @@ workflows:
           XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-          echo "Project: $XCODEPROJ"
-          echo "Scheme: $SCHEME"
-
           xcodebuild \
-            -project "$XCODEPROJ" \
-            -scheme "$SCHEME" \
-            -configuration Release \
-            -destination generic/platform=iOS \
-            -allowProvisioningUpdates \
-            CODE_SIGN_STYLE=Automatic \
-            clean archive \
-            -archivePath $CM_BUILD_DIR/build/App.xcarchive
+          -project "$XCODEPROJ" \
+          -scheme "$SCHEME" \
+          -configuration Release \
+          -destination generic/platform=iOS \
+          -allowProvisioningUpdates \
+          CODE_SIGN_STYLE=Automatic \
+          DEVELOPMENT_TEAM=9WY9B7WP2D \
+          PROVISIONING_PROFILE_SPECIFIER="" \
+          clean archive \
+          -archivePath $CM_BUILD_DIR/build/App.xcarchive
 
       # ---------------- EXPORT OPTIONS ----------------
       - name: Create ExportOptions.plist
