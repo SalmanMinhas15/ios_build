@@ -5,31 +5,36 @@ workflows:
 
     environment:
       xcode: 16.3
+      vars:
+        BUNDLE_ID: "com.kickupkings.kickupkings"
+        SCHEME: "pruduction_build"
 
     scripts:
-      - name: Select Xcode
-        script: sudo xcode-select -s /Applications/Xcode.app
 
-      - name: Find project
+      - name: Find project safely
         script: |
           cd ios
           XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
-          echo "Project: $XCODEPROJ"
 
-          SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
-          echo "Scheme: $SCHEME"
+          if [ -z "$XCODEPROJ" ]; then
+            echo "❌ No xcodeproj found"
+            exit 1
+          fi
 
-          echo "export XCODEPROJ=$XCODEPROJ" >> $CM_ENV
-          echo "export SCHEME=$SCHEME" >> $CM_ENV
-
-      - name: Clean build
-        script: |
-          xcodebuild clean \
-            -project "$XCODEPROJ" \
-            -scheme "$SCHEME"
+          echo "Project found: $XCODEPROJ"
+          echo "$XCODEPROJ" > project.txt
 
       - name: Archive iOS app
         script: |
+          cd ios
+
+          XCODEPROJ=$(cat project.txt)
+
+          echo "Using project: $XCODEPROJ"
+          echo "Scheme: $SCHEME"
+
+          xcodebuild clean
+
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
@@ -37,10 +42,12 @@ workflows:
             -destination generic/platform=iOS \
             -allowProvisioningUpdates \
             clean archive \
-            -archivePath $CM_BUILD_DIR/build/App.xcarchive
+            -archivePath "$CM_BUILD_DIR/build/App.xcarchive"
 
       - name: Create ExportOptions.plist
         script: |
+          mkdir -p $CM_BUILD_DIR/build
+
           cat > $CM_BUILD_DIR/ExportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -54,6 +61,9 @@ workflows:
 
               <key>teamID</key>
               <string>9WY9B7WP2D</string>
+
+              <key>compileBitcode</key>
+              <false/>
           </dict>
           </plist>
           EOF
@@ -61,10 +71,10 @@ workflows:
       - name: Export IPA
         script: |
           xcodebuild -exportArchive \
-            -archivePath $CM_BUILD_DIR/build/App.xcarchive \
-            -exportOptionsPlist $CM_BUILD_DIR/ExportOptions.plist \
-            -exportPath $CM_BUILD_DIR/build/ipa
+            -archivePath "$CM_BUILD_DIR/build/App.xcarchive" \
+            -exportOptionsPlist "$CM_BUILD_DIR/ExportOptions.plist" \
+            -exportPath "$CM_BUILD_DIR/build/ipa"
 
     artifacts:
-      - build/ipa/*.ipa
-      - build/App.xcarchive
+      - build/ipa/**/*.ipa
+      - build/*.xcarchive
