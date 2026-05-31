@@ -372,6 +372,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "pruduction_build/pruduction_build.entitlements";
 				CODE_SIGN_STYLE = "Automatic";
+				CODE_SIGN_IDENTITY = "";
 				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)";
 				DEVELOPMENT_TEAM = 9WY9B7WP2D;
 				INFOPLIST_FILE = "pruduction_build/pruduction_build-Info.plist";
@@ -408,6 +409,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "pruduction_build/pruduction_build.entitlements";
 				CODE_SIGN_STYLE = "Automatic";
+				CODE_SIGN_IDENTITY = "";
 				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)";
 				DEVELOPMENT_TEAM = 9WY9B7WP2D;
 				INFOPLIST_FILE = "pruduction_build/pruduction_build-Info.plist";
