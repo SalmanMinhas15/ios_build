@@ -17,20 +17,15 @@ workflows:
           cd ios
           XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
-          echo "Project: $XCODEPROJ"
-          echo "Scheme:  $SCHEME"
           echo "XCODEPROJ=$XCODEPROJ" >> $CM_ENV
-          echo "SCHEME=$SCHEME"       >> $CM_ENV
+          echo "SCHEME=$SCHEME" >> $CM_ENV
+          echo "Found project: $XCODEPROJ, scheme: $SCHEME"
 
-      - name: Debug signing environment
+      - name: Set code signing settings
         script: |
-          echo "=== Codemagic signing vars ==="
-          echo "CM_PROVISIONING_PROFILE:      $CM_PROVISIONING_PROFILE"
-          echo "CM_CERTIFICATE:               $CM_CERTIFICATE"
-          echo "CM_PROVISIONING_PROFILE_UUID: $CM_PROVISIONING_PROFILE_UUID"
-          echo "=============================="
-          # List what's in the keychain to confirm cert is loaded
-          security find-identity -v -p codesigning
+          cd ios
+          # Inject the provisioning profile and certificate into the Xcode project
+          xcode-project use-profiles
 
       - name: Clean and Archive iOS app
         script: |
@@ -71,15 +66,11 @@ workflows:
               </dict>
               <key>compileBitcode</key>
               <false/>
-              <key>uploadSymbols</key>
-              <true/>
               <key>stripSwiftSymbols</key>
               <true/>
           </dict>
           </plist>
           EOF
-          echo "--- ExportOptions.plist ---"
-          cat $CM_BUILD_DIR/ExportOptions.plist
 
       - name: Export IPA
         script: |
