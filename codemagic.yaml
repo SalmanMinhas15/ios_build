@@ -21,28 +21,69 @@ workflows:
           echo "SCHEME=$SCHEME" >> $CM_ENV
           echo "Found project: $XCODEPROJ, scheme: $SCHEME"
 
+      - name: DEBUG - Check all signing vars
+        script: |
+          echo "====== SIGNING DEBUG ======"
+          echo "CM_PROVISIONING_PROFILE=[$CM_PROVISIONING_PROFILE]"
+          echo "CM_PROVISIONING_PROFILE_UUID=[$CM_PROVISIONING_PROFILE_UUID]"
+          echo "CM_CERTIFICATE=[$CM_CERTIFICATE]"
+          echo "XCODEPROJ=[$XCODEPROJ]"
+          echo "SCHEME=[$SCHEME]"
+          echo ""
+          echo "--- Keychain identities ---"
+          security find-identity -v -p codesigning
+          echo ""
+          echo "--- Installed provisioning profiles ---"
+          ls ~/Library/MobileDevice/Provisioning\ Profiles/ 2>/dev/null || echo "No profiles folder found"
+          echo ""
+          echo "--- Current signing settings in pbxproj ---"
+          grep -E "CODE_SIGN|PROVISIONING|DEVELOPMENT_TEAM|PRODUCT_BUNDLE_IDENTIFIER" \
+            ios/pruduction_build.xcodeproj/project.pbxproj || echo "Could not read pbxproj"
+          echo "====== END DEBUG ======"
+
       - name: Fix signing in pbxproj
         script: |
           cd ios
-          PBXPROJ="$XCODEPROJ/project.pbxproj"
+          PBXPROJ="pruduction_build.xcodeproj/project.pbxproj"
           echo "Patching: $PBXPROJ"
 
-          # Force manual signing style
-          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$PBXPROJ"
+          # Use Python instead of sed to avoid GNU/BSD sed differences
+          python3 << PYEOF
+import re
 
-          # Set correct team ID
-          sed -i '' "s/DEVELOPMENT_TEAM = \"\";/DEVELOPMENT_TEAM = $TEAM_ID;/g" "$PBXPROJ"
-          sed -i '' "s/DEVELOPMENT_TEAM = [A-Z0-9]*;/DEVELOPMENT_TEAM = $TEAM_ID;/g" "$PBXPROJ"
+with open("$PBXPROJ", "r") as f:
+    content = f.read()
 
-          # Set bundle ID
-          sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER = .*;/PRODUCT_BUNDLE_IDENTIFIER = $BUNDLE_ID;/g" "$PBXPROJ"
+# Force manual signing
+content = re.sub(r'CODE_SIGN_STYLE = Automatic;', 'CODE_SIGN_STYLE = Manual;', content)
 
-          # Set provisioning profile specifier
-          sed -i '' "s/PROVISIONING_PROFILE_SPECIFIER = .*;/PROVISIONING_PROFILE_SPECIFIER = \"$CM_PROVISIONING_PROFILE\";/g" "$PBXPROJ"
+# Set team ID
+content = re.sub(r'DEVELOPMENT_TEAM = [^;]*;', 'DEVELOPMENT_TEAM = $TEAM_ID;', content)
 
-          # If no PROVISIONING_PROFILE_SPECIFIER line exists at all, add it
-          grep -q "PROVISIONING_PROFILE_SPECIFIER" "$PBXPROJ" || \
-            sed -i '' "s/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Manual;\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"$CM_PROVISIONING_PROFILE\";/g" "$PBXPROJ"
+# Set bundle ID
+content = re.sub(r'PRODUCT_BUNDLE_IDENTIFIER = [^;]*;', 'PRODUCT_BUNDLE_IDENTIFIER = $BUNDLE_ID;', content)
+
+# Set provisioning profile specifier
+profile = "$CM_PROVISIONING_PROFILE"
+if profile:
+    if re.search(r'PROVISIONING_PROFILE_SPECIFIER', content):
+        content = re.sub(
+            r'PROVISIONING_PROFILE_SPECIFIER = [^;]*;',
+            f'PROVISIONING_PROFILE_SPECIFIER = "{profile}";',
+            content
+        )
+    else:
+        content = re.sub(
+            r'CODE_SIGN_STYLE = Manual;',
+            f'CODE_SIGN_STYLE = Manual;\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "{profile}";',
+            content
+        )
+
+with open("$PBXPROJ", "w") as f:
+    f.write(content)
+
+print("Patch complete")
+PYEOF
 
           echo "=== Verifying patch ==="
           grep -E "CODE_SIGN_STYLE|DEVELOPMENT_TEAM|PROVISIONING_PROFILE|PRODUCT_BUNDLE_IDENTIFIER" "$PBXPROJ"
