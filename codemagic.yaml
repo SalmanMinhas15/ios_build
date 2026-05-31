@@ -12,7 +12,7 @@ workflows:
         TEAM_ID: "9WY9B7WP2D"
 
     integrations:
-      app_store_connect: YOUR_ASC_KEY_NAME   # name you gave it in dashboard
+      app_store_connect: kickupkings  # name you gave it in dashboard
 
     scripts:
       - name: Find Xcode project and set env vars
