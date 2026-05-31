@@ -1,19 +1,14 @@
 workflows:
   ios-build:
-    name: iOS Build Fixed
+    name: Godot iOS Signed Build
     max_build_duration: 120
 
     environment:
       xcode: 16.3
 
     scripts:
-      - name: Select project
-        script: |
-          cd ios
-          XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
-          SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-      - name: Archive (SIGNED)
+      - name: Select project
         script: |
           cd ios
 
@@ -22,6 +17,18 @@ workflows:
 
           echo "Project: $XCODEPROJ"
           echo "Scheme: $SCHEME"
+
+          echo "$XCODEPROJ" > $CM_BUILD_DIR/project_path.txt
+          echo "$SCHEME" > $CM_BUILD_DIR/scheme.txt
+
+      - name: Clean and Archive iOS app
+        script: |
+          cd ios
+
+          XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
+          SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
+
+          mkdir -p $CM_BUILD_DIR
 
           xcodebuild \
             -project "$XCODEPROJ" \
@@ -32,12 +39,13 @@ workflows:
             CODE_SIGN_STYLE=Automatic \
             DEVELOPMENT_TEAM=9WY9B7WP2D \
             clean archive \
-            -archivePath $CM_BUILD_DIR/App.xcarchive
+            -archivePath "$CM_BUILD_DIR/App.xcarchive"
 
-      - name: Export IPA
+      - name: Create ExportOptions.plist
         script: |
           cat > $CM_BUILD_DIR/ExportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
               <key>method</key>
@@ -48,14 +56,20 @@ workflows:
 
               <key>teamID</key>
               <string>9WY9B7WP2D</string>
+
+              <key>compileBitcode</key>
+              <false/>
           </dict>
           </plist>
           EOF
 
+      - name: Export IPA
+        script: |
           xcodebuild -exportArchive \
-            -archivePath $CM_BUILD_DIR/App.xcarchive \
-            -exportOptionsPlist $CM_BUILD_DIR/ExportOptions.plist \
-            -exportPath $CM_BUILD_DIR/ipa
+            -archivePath "$CM_BUILD_DIR/App.xcarchive" \
+            -exportOptionsPlist "$CM_BUILD_DIR/ExportOptions.plist" \
+            -exportPath "$CM_BUILD_DIR/ipa"
 
     artifacts:
       - ipa/*.ipa
+      - build/*.ipa
