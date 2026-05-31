@@ -4,49 +4,17 @@ workflows:
     max_build_duration: 120
 
     environment:
-      xcode: latest
-      vars:
-        EXPORT_OPTIONS_PLIST: $CM_BUILD_DIR/ExportOptions.plist
+      xcode: 16.3
 
     scripts:
-
-      - name: Show project files
-        script: |
-          echo "Listing project structure..."
-          ls -R
-
-      - name: Setup ExportOptions.plist
-        script: |
-          echo "Preparing ExportOptions.plist..."
-          cp ExportOptions.plist $EXPORT_OPTIONS_PLIST
-
-      - name: Find Xcode project
+      - name: Build Archive
         script: |
           cd ios
 
           XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
-
-          if [ -z "$XCODEPROJ" ]; then
-            echo "❌ No xcodeproj found"
-            exit 1
-          fi
-
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-          echo "Project: $XCODEPROJ"
-          echo "Scheme: $SCHEME"
-
-      - name: Clean build
-        script: |
-          cd ios
           xcodebuild clean
-
-      - name: Archive iOS app (SIGNED)
-        script: |
-          cd ios
-
-          XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
-          SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
           xcodebuild \
             -project "$XCODEPROJ" \
@@ -54,17 +22,36 @@ workflows:
             -configuration Release \
             -destination generic/platform=iOS \
             -allowProvisioningUpdates \
-            CODE_SIGN_STYLE=Manual \
-            archive \
-            -archivePath $CM_BUILD_DIR/build/App.xcarchive
+            -archivePath $CM_BUILD_DIR/build/App.xcarchive \
+            archive
+
+      - name: Create ExportOptions.plist
+        script: |
+          cat > $CM_BUILD_DIR/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store</string>
+
+              <key>signingStyle</key>
+              <string>manual</string>
+
+              <key>teamID</key>
+              <string>9WY9B7WP2D</string>
+
+
+          </dict>
+          </plist>
+          EOF
 
       - name: Export IPA
         script: |
           xcodebuild -exportArchive \
             -archivePath $CM_BUILD_DIR/build/App.xcarchive \
-            -exportOptionsPlist $EXPORT_OPTIONS_PLIST \
-            -exportPath $CM_BUILD_DIR/build/ipa
+            -exportPath $CM_BUILD_DIR/build/ipa \
+            -exportOptionsPlist ExportOptions.plist
 
     artifacts:
       - build/ipa/*.ipa
-      - build/App.xcarchive
