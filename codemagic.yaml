@@ -11,6 +11,9 @@ workflows:
         BUNDLE_ID: "com.kickupkings.kickupkings"
         TEAM_ID: "9WY9B7WP2D"
 
+    integrations:
+      app_store_connect: YOUR_ASC_KEY_NAME   # name you gave it in dashboard
+
     scripts:
       - name: Find Xcode project and set env vars
         script: |
@@ -19,7 +22,6 @@ workflows:
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
           echo "Project: $XCODEPROJ"
           echo "Scheme:  $SCHEME"
-          # Export as env vars for subsequent steps
           echo "XCODEPROJ=$XCODEPROJ" >> $CM_ENV
           echo "SCHEME=$SCHEME"       >> $CM_ENV
 
@@ -41,8 +43,6 @@ workflows:
 
       - name: Create ExportOptions.plist
         script: |
-          # CM_PROVISIONING_PROFILE is the profile NAME injected by Codemagic
-          # CM_PROVISIONING_PROFILE_SPECIFIER is the UUID — use name here
           cat > $CM_BUILD_DIR/ExportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -71,7 +71,6 @@ workflows:
           </dict>
           </plist>
           EOF
-          # Verify it looks correct
           echo "--- ExportOptions.plist ---"
           cat $CM_BUILD_DIR/ExportOptions.plist
 
@@ -88,5 +87,5 @@ workflows:
 
     publishing:
       app_store_connect:
-        auth: integration  # Set up in Codemagic dashboard → Integrations
+        auth: integration
         submit_to_testflight: true
