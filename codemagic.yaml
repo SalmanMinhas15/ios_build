@@ -1,21 +1,27 @@
 workflows:
   ios-build:
-    name: iOS Build
+    name: iOS Build Fixed
     max_build_duration: 120
 
     environment:
       xcode: 16.3
 
     scripts:
-      - name: Select Xcode
-        script: sudo xcode-select -s /Applications/Xcode-16.3.app
+      - name: Select project
+        script: |
+          cd ios
+          XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
+          SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-      - name: Archive
+      - name: Archive (SIGNED)
         script: |
           cd ios
 
           XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
+
+          echo "Project: $XCODEPROJ"
+          echo "Scheme: $SCHEME"
 
           xcodebuild \
             -project "$XCODEPROJ" \
