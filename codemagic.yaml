@@ -8,6 +8,11 @@ workflows:
 
     scripts:
 
+      - name: Show project structure
+        script: |
+          ls -R
+
+      # ---------------- ARCHIVE ----------------
       - name: Archive iOS app
         script: |
           cd ios
@@ -15,15 +20,20 @@ workflows:
           XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
+          echo "Project: $XCODEPROJ"
+          echo "Scheme: $SCHEME"
+
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
             -configuration Release \
             -destination generic/platform=iOS \
             -allowProvisioningUpdates \
+            CODE_SIGN_STYLE=Automatic \
             clean archive \
             -archivePath $CM_BUILD_DIR/build/App.xcarchive
 
+      # ---------------- EXPORT OPTIONS ----------------
       - name: Create ExportOptions.plist
         script: |
           cat > $CM_BUILD_DIR/ExportOptions.plist <<EOF
@@ -36,10 +46,17 @@ workflows:
 
               <key>signingStyle</key>
               <string>automatic</string>
+
+              <key>compileBitcode</key>
+              <false/>
+
+              <key>stripSwiftSymbols</key>
+              <true/>
           </dict>
           </plist>
           EOF
 
+      # ---------------- EXPORT IPA ----------------
       - name: Export IPA
         script: |
           xcodebuild -exportArchive \
@@ -49,3 +66,4 @@ workflows:
 
     artifacts:
       - build/ipa/*.ipa
+      - build/App.xcarchive
