@@ -6,38 +6,45 @@ workflows:
     environment:
       xcode: latest
       groups:
-        - app_store_credentials # Double check this matches your exact variable group name in Codemagic
+        - app_store_credentials 
       vars:
         XCODE_BUNDLE_IDENTIFIER: "com.kickupkings.kickupkings"
 
     scripts:
       - name: Show files
         script: |
+          echo "Current working directory:"
+          pwd
+          echo "Listing root files:"
+          ls -la
+          echo "Listing contents of ios folder:"
           ls -R ios
 
       - name: Set up code signing
         script: |
-          # Automatically pulls your uploaded certificate/profile and configures the environment
+          # Step inside the exported Godot project folder so the profile tool finds the .xcodeproj file
+          cd ios
           xcode-project use-profiles --archive-method app-store
 
       - name: Build and Sign Production iOS Archive
         script: |
+          # Step inside the exported Godot project folder to compile
           cd ios
 
-          # Dynamically locate the newly exported Xcode project and its Scheme name
           XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
           if [ -z "$XCODEPROJ" ]; then echo "No xcodeproj found"; exit 1; fi
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-          # 1. Compile and Archive the fresh project layout
+          # 1. Compile and Archive using the individual production identity
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
             -configuration Release \
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
             archive
 
-          # 2. Export into a true signed production .ipa using Codemagic's generated profile map
+          # 2. Export into a signed production .ipa using Codemagic's auto-generated profile map
           xcodebuild \
             -exportArchive \
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
@@ -45,4 +52,4 @@ workflows:
             -exportOptionsPlist /Users/builder/export_options.plist
 
     artifacts:
-      - output/*.ipa
+      - ios/output/*.ipa
