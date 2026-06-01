@@ -15,36 +15,32 @@ workflows:
         script: |
           echo "Current working directory:"
           pwd
-          echo "Listing root files:"
-          ls -la
-          echo "Listing contents of ios folder:"
+          echo "Listingcontents of ios folder:"
           ls -R ios
 
       - name: Set up code signing
         script: |
-          # Step inside the exported Godot project folder so the profile tool finds the .xcodeproj file
+          # Step inside the exported project so the profile engine maps to your .xcodeproj setup
           cd ios
           xcode-project use-profiles --archive-method app-store
 
       - name: Build and Sign Production iOS Archive
         script: |
-          # Step inside the exported Godot project folder to compile
           cd ios
 
           XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
           if [ -z "$XCODEPROJ" ]; then echo "No xcodeproj found"; exit 1; fi
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-          # 1. Compile and Archive using the individual production identity
+          # 1. Compile the archive using the default project settings to bypass conflicts
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
             -configuration Release \
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
             archive
 
-          # 2. Export into a signed production .ipa using Codemagic's auto-generated profile map
+          # 2. Export and overwrite the signature using Codemagic's valid distribution options plist
           xcodebuild \
             -exportArchive \
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
