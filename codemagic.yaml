@@ -26,7 +26,7 @@ workflows:
           if [ -z "$XCODEPROJ" ]; then echo "No xcodeproj found"; exit 1; fi
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-          # 1. Archive the project
+          # 1. Archive the project using individual production signing configurations
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
@@ -34,7 +34,7 @@ workflows:
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
             archive
 
-          # 2. Generate ExportOptions.plist specifying the explicit Distribution Certificate identity
+          # 2. Generate ExportOptions.plist using "Apple Distribution" instead of organization styles
           cat <<'EOF' > ExportOptions.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -47,7 +47,7 @@ workflows:
               <key>signingStyle</key>
               <string>manual</string>
               <key>signingCertificate</key>
-              <string>iOS Distribution</string>
+              <string>Apple Distribution</string>
               <key>stripSwiftSymbols</key>
               <true/>
               <key>compileBitcode</key>
@@ -61,10 +61,10 @@ workflows:
           </plist>
           EOF
 
-          # Inject the dynamic provisioning profile UUID downloaded by Codemagic
+          # Inject the explicit provisioning profile UUID pulled by Codemagic
           sed -i '' "s/PROVISIONING_PROFILE_PLACEHOLDER/$CM_PROVISIONING_PROFILE_UUID/" ExportOptions.plist
 
-          # 3. Final Export
+          # 3. Final Export Execution
           xcodebuild \
             -exportArchive \
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
