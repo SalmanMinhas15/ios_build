@@ -16,7 +16,6 @@ workflows:
 
       - name: Set up code signing
         script: |
-          # Dynamically initializes your certificate and profile into the Mac keychain
           xcode-project use-profiles --archive-method app-store
 
       - name: Build and Sign Production iOS Archive
@@ -27,7 +26,7 @@ workflows:
           if [ -z "$XCODEPROJ" ]; then echo "No xcodeproj found"; exit 1; fi
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-          # 1. Clean and Archive the project
+          # 1. Archive the project
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
@@ -35,8 +34,8 @@ workflows:
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
             archive
 
-          # 2. Manually generate a flawless ExportOptions.plist with correct Dictionary nesting
-          cat <<EOF > ExportOptions.plist
+          # 2. Generate ExportOptions.plist specifying the explicit Distribution Certificate identity
+          cat <<'EOF' > ExportOptions.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -47,6 +46,8 @@ workflows:
               <string>9WY9B7WP2D</string>
               <key>signingStyle</key>
               <string>manual</string>
+              <key>signingCertificate</key>
+              <string>iOS Distribution</string>
               <key>stripSwiftSymbols</key>
               <true/>
               <key>compileBitcode</key>
@@ -54,13 +55,16 @@ workflows:
               <key>provisioningProfiles</key>
               <dict>
                   <key>com.kickupkings.kickupkings</key>
-                  <string>$CM_PROVISIONING_PROFILE_UUID</string>
+                  <string>PROVISIONING_PROFILE_PLACEHOLDER</string>
               </dict>
           </dict>
           </plist>
           EOF
 
-          # 3. Export using our custom, strictly formatted file
+          # Inject the dynamic provisioning profile UUID downloaded by Codemagic
+          sed -i '' "s/PROVISIONING_PROFILE_PLACEHOLDER/$CM_PROVISIONING_PROFILE_UUID/" ExportOptions.plist
+
+          # 3. Final Export
           xcodebuild \
             -exportArchive \
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
