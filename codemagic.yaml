@@ -6,7 +6,7 @@ workflows:
     environment:
       xcode: latest
       groups:
-        - app_store_credentials # <-- DOUBLE CHECK THIS MATCHES YOUR DASHBOARD GROUP NAME
+        - app_store_credentials 
       vars:
         XCODE_BUNDLE_IDENTIFIER: "com.kickupkings.kickupkings"
 
@@ -18,14 +18,22 @@ workflows:
         script: |
           xcode-project use-profiles --archive-method app-store
 
-      - name: Force Clear Godot Hardcoded Signing
+      - name: Force Manual Signing in Project File
         script: |
           cd ios
           XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
+          PBXPROJ="$XCODEPROJ/project.pbxproj"
           
-          # Forcefully strips any restrictive "iOS Distribution" strings out of Godot's project configurations
-          sed -i '' 's/CODE_SIGN_IDENTITY = "iPhone Distribution";/CODE_SIGN_IDENTITY = "Apple Distribution";/g' "$XCODEPROJ/project.pbxproj" || true
-          sed -i '' 's/CODE_SIGN_IDENTITY\[sdk=iphoneos\*\] = "iPhone Distribution";/CODE_SIGN_IDENTITY = "Apple Distribution";/g' "$XCODEPROJ/project.pbxproj" || true
+          # 1. Force switch from Automatic to Manual signing styles across configurations
+          sed -i '' 's/CODE_SIGN_STYLE = "Automatic";/CODE_SIGN_STYLE = "Manual";/g' "$PBXPROJ"
+          
+          # 2. Find any empty signing identity strings and explicitly replace them with your individual identity
+          sed -i '' 's/CODE_SIGN_IDENTITY = "";/CODE_SIGN_IDENTITY = "Apple Distribution";/g' "$PBXPROJ"
+          sed -i '' 's/CODE_SIGN_IDENTITY\[sdk=iphoneos\*\] = "";/CODE_SIGN_IDENTITY = "Apple Distribution";/g' "$PBXPROJ"
+          
+          # 3. Explicitly inject your personal Developer Team ID into the project template properties
+          sed -i '' 's/DEVELOPMENT_TEAM = "";/DEVELOPMENT_TEAM = "9WY9B7WP2D";/g' "$PBXPROJ"
+          sed -i '' 's/CODE_SIGN_STYLE = "Manual";/CODE_SIGN_STYLE = "Manual";\'$'\n''DEVELOPMENT_TEAM = "9WY9B7WP2D";/g' "$PBXPROJ"
 
       - name: Build and Sign Production iOS Archive
         script: |
@@ -35,18 +43,18 @@ workflows:
           if [ -z "$XCODEPROJ" ]; then echo "No xcodeproj found"; exit 1; fi
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-          # 1. Archive the project using explicit build flags that override the project file
+          # 1. Archive the project using explicit override flags
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
             -configuration Release \
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
+            DEVELOPMENT_TEAM="9WY9B7WP2D" \
+            CODE_SIGN_STYLE="Manual" \
             CODE_SIGN_IDENTITY="Apple Distribution" \
-            CODE_SIGNING_ALLOWED=YES \
-            CODE_SIGNING_REQUIRED=YES \
             archive
 
-          # 2. Generate clean ExportOptions without hardcoded name limitations
+          # 2. Generate clean ExportOptions configuration file
           cat <<'EOF' > ExportOptions.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -58,6 +66,8 @@ workflows:
               <string>9WY9B7WP2D</string>
               <key>signingStyle</key>
               <string>manual</string>
+              <key>signingCertificate</key>
+              <string>Apple Distribution</string>
               <key>stripSwiftSymbols</key>
               <true/>
               <key>compileBitcode</key>
@@ -71,7 +81,7 @@ workflows:
           </plist>
           EOF
 
-          # Inject the dynamic provisioning profile UUID
+          # Inject the profile UUID parsed by Codemagic
           sed -i '' "s/PROVISIONING_PROFILE_PLACEHOLDER/$CM_PROVISIONING_PROFILE_UUID/" ExportOptions.plist
 
           # 3. Export execution
