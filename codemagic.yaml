@@ -5,6 +5,9 @@ workflows:
 
     environment:
       xcode: latest
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.kickupkings.kickupkings
       groups:
         - app_store_credentials
       vars:
@@ -21,12 +24,11 @@ workflows:
       - name: Sanitize Xcode Project Signing Settings
         script: |
           python3 -c "
-          import os, re
+          import os
           pbx_path = 'ios/build.xcodeproj/project.pbxproj'
           if os.path.exists(pbx_path):
               with open(pbx_path, 'r') as f:
                   text = f.read()
-              # Fix both quoted and unquoted variants
               text = text.replace('CODE_SIGN_STYLE = \"Automatic\";', 'CODE_SIGN_STYLE = \"Manual\";')
               text = text.replace('CODE_SIGN_STYLE = Automatic;', 'CODE_SIGN_STYLE = Manual;')
               text = text.replace('ProvisioningStyle = Automatic;', 'ProvisioningStyle = Manual;')
@@ -42,7 +44,14 @@ workflows:
           cd ios
           xcode-project use-profiles --archive-method app-store
 
-      - name: Build and Sign Production iOS Archive
+      - name: Debug provisioning profiles
+        script: |
+          echo "Installed provisioning profiles:"
+          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ || echo "Directory empty or missing"
+          echo "export_options.plist contents:"
+          cat /Users/builder/export_options.plist || echo "Not generated yet"
+
+      - name: Build Production iOS Archive
         script: |
           cd ios
 
@@ -50,39 +59,24 @@ workflows:
           if [ -z "$XCODEPROJ" ]; then echo "No xcodeproj found"; exit 1; fi
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-          # Extract the provisioning profile UUID that use-profiles already
-          # installed into ~/Library/MobileDevice/Provisioning Profiles/
-          PROV_PROFILE_UUID=$(
-            python3 -c "
-          import plistlib, glob, os
-          profiles = glob.glob(os.path.expanduser(
-              '~/Library/MobileDevice/Provisioning Profiles/*.mobileprovision'))
-          bundle_id = 'com.kickupkings.kickupkings'
-          for p in profiles:
-              try:
-                  with open(p, 'rb') as f:
-                      raw = f.read()
-                  # Extract the plist XML embedded in the mobileprovision
-                  start = raw.index(b'<?xml')
-                  end   = raw.index(b'</plist>') + len(b'</plist>')
-                  pl = plistlib.loads(raw[start:end])
-                  ids = pl.get('Entitlements', {}).get('application-identifier', '')
-                  if bundle_id in ids:
-                      print(pl['UUID'])
-                      break
-              except Exception:
-                  pass
-          "
-          )
-
-          echo "Resolved Provisioning Profile UUID: $PROV_PROFILE_UUID"
-
-          if [ -z "$PROV_PROFILE_UUID" ]; then
-            echo "ERROR: Could not find a provisioning profile for $XCODE_BUNDLE_IDENTIFIER"
-            echo "Installed profiles:"
-            ls ~/Library/MobileDevice/Provisioning\ Profiles/ || true
+          # Extract UUID from installed provisioning profile
+          PROV_PROFILE_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -n 1)
+          if [ -z "$PROV_PROFILE_PATH" ]; then
+            echo "ERROR: No provisioning profile found installed on machine"
             exit 1
           fi
+
+          PROV_PROFILE_UUID=$(python3 -c "
+          import plistlib, sys
+          with open('$PROV_PROFILE_PATH', 'rb') as f:
+              raw = f.read()
+          start = raw.index(b'<?xml')
+          end = raw.index(b'</plist>') + len(b'</plist>')
+          pl = plistlib.loads(raw[start:end])
+          print(pl['UUID'])
+          ")
+
+          echo "Using Provisioning Profile UUID: $PROV_PROFILE_UUID"
 
           xcodebuild \
             -project "$XCODEPROJ" \
@@ -97,26 +91,6 @@ workflows:
 
       - name: Export Production IPA
         script: |
-          # Patch export_options.plist if provisioningProfiles is an array
-          python3 -c "
-          import os, plistlib
-          plist_path = '/Users/builder/export_options.plist'
-          if not os.path.exists(plist_path):
-              print('export_options.plist not found — skipping patch')
-          else:
-              with open(plist_path, 'rb') as f:
-                  pl = plistlib.load(f)
-              if isinstance(pl.get('provisioningProfiles'), list):
-                  print('Fixing provisioningProfiles: Array -> Dictionary')
-                  vals = pl['provisioningProfiles']
-                  pl['provisioningProfiles'] = {
-                      'com.kickupkings.kickupkings': vals[0] if vals else ''
-                  }
-                  with open(plist_path, 'wb') as f:
-                      plistlib.dump(pl, f)
-                  print('Patched.')
-          "
-
           xcodebuild \
             -exportArchive \
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
