@@ -9,6 +9,9 @@ workflows:
         - app_store_credentials 
 
     scripts:
+      - name: Show files
+        script: ls -R ios
+
       - name: Set up code signing
         script: |
           xcode-project use-profiles
@@ -21,7 +24,7 @@ workflows:
           if [ -z "$XCODEPROJ" ]; then echo "No xcodeproj found"; exit 1; fi
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-          # 1. Archive the project (This succeeded!)
+          # 1. Archive the project
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
@@ -29,14 +32,16 @@ workflows:
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
             archive
 
-          # 2. Automatically generate the missing ExportOptions.plist file
+          # 2. Automatically generate the ExportOptions.plist file with your Team ID
           cat <<EOF > ExportOptions.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
               <key>method</key>
-              <string>app-store</string>
+              <string>app-store-connect</string>
+              <key>teamID</key>
+              <string>9WY9B7WP2D</string>
               <key>signingStyle</key>
               <string>manual</string>
               <key>stripSwiftSymbols</key>
