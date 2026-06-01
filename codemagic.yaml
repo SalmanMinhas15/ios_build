@@ -6,90 +6,43 @@ workflows:
     environment:
       xcode: latest
       groups:
-        - app_store_credentials 
+        - app_store_credentials # Double check this matches your exact variable group name in Codemagic
       vars:
         XCODE_BUNDLE_IDENTIFIER: "com.kickupkings.kickupkings"
 
     scripts:
       - name: Show files
-        script: ls -R ios
+        script: |
+          ls -R ios
 
       - name: Set up code signing
         script: |
+          # Automatically pulls your uploaded certificate/profile and configures the environment
           xcode-project use-profiles --archive-method app-store
-
-      - name: Force Manual Signing in Project File
-        script: |
-          cd ios
-          XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
-          PBXPROJ="$XCODEPROJ/project.pbxproj"
-          
-          # 1. Force switch from Automatic to Manual signing styles across configurations
-          sed -i '' 's/CODE_SIGN_STYLE = "Automatic";/CODE_SIGN_STYLE = "Manual";/g' "$PBXPROJ"
-          
-          # 2. Overwrite whatever was typed into the identity fields with the strict "Apple Distribution" format
-          sed -i '' 's/CODE_SIGN_IDENTITY = ".*";/CODE_SIGN_IDENTITY = "Apple Distribution";/g' "$PBXPROJ"
-          sed -i '' 's/CODE_SIGN_IDENTITY\[sdk=iphoneos\*\] = ".*";/CODE_SIGN_IDENTITY = "Apple Distribution";/g' "$PBXPROJ"
-          
-          # 3. Inject your personal Developer Team ID into the project template properties
-          sed -i '' 's/DEVELOPMENT_TEAM = ".*";/DEVELOPMENT_TEAM = "9WY9B7WP2D";/g' "$PBXPROJ"
-          sed -i '' 's/CODE_SIGN_STYLE = "Manual";/CODE_SIGN_STYLE = "Manual";\'$'\n''DEVELOPMENT_TEAM = "9WY9B7WP2D";/g' "$PBXPROJ"
 
       - name: Build and Sign Production iOS Archive
         script: |
           cd ios
 
+          # Dynamically locate the newly exported Xcode project and its Scheme name
           XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
           if [ -z "$XCODEPROJ" ]; then echo "No xcodeproj found"; exit 1; fi
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-          # 1. Archive the project using strict override flags
+          # 1. Compile and Archive the fresh project layout
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
             -configuration Release \
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
-            DEVELOPMENT_TEAM="9WY9B7WP2D" \
-            CODE_SIGN_STYLE="Manual" \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
             archive
 
-          # 2. Generate clean ExportOptions configuration file
-          cat <<'EOF' > ExportOptions.plist
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>app-store-connect</string>
-              <key>teamID</key>
-              <string>9WY9B7WP2D</string>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>signingCertificate</key>
-              <string>Apple Distribution</string>
-              <key>stripSwiftSymbols</key>
-              <true/>
-              <key>compileBitcode</key>
-              <false/>
-              <key>provisioningProfiles</key>
-              <dict>
-                  <key>com.kickupkings.kickupkings</key>
-                  <string>PROVISIONING_PROFILE_PLACEHOLDER</string>
-              </dict>
-          </dict>
-          </plist>
-          EOF
-
-          # Inject the profile UUID parsed by Codemagic
-          sed -i '' "s/PROVISIONING_PROFILE_PLACEHOLDER/$CM_PROVISIONING_PROFILE_UUID/" ExportOptions.plist
-
-          # 3. Export execution
+          # 2. Export into a true signed production .ipa using Codemagic's generated profile map
           xcodebuild \
             -exportArchive \
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
             -exportPath "$CM_BUILD_DIR/output" \
-            -exportOptionsPlist ExportOptions.plist
+            -exportOptionsPlist /Users/builder/export_options.plist
 
     artifacts:
       - output/*.ipa
