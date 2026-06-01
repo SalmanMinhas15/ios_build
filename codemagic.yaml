@@ -15,14 +15,54 @@ workflows:
         script: |
           echo "Current working directory:"
           pwd
-          echo "Listingcontents of ios folder:"
+          echo "Listing contents of ios folder:"
           ls -R ios
+
+      - name: Sanitize Xcode Project Signing Settings
+        script: |
+          # Force the project to use Manual signing to align with Apple Distribution certificates
+          python3 -c "
+          import os
+          pbx_path = 'ios/build.xcodeproj/project.pbxproj'
+          if os.path.exists(pbx_path):
+              with open(pbx_path, 'r') as f:
+                  text = f.read()
+              text = text.replace('CODE_SIGN_STYLE = \"Automatic\";', 'CODE_SIGN_STYLE = \"Manual\";')
+              text = text.replace('ProvisioningStyle = Automatic;', 'ProvisioningStyle = Manual;')
+              with open(pbx_path, 'w') as f:
+                  f.write(text)
+              print('Successfully converted project configurations to Manual Signing Style.')
+          else:
+              print('Error: project.pbxproj not found!')
+          "
 
       - name: Set up code signing
         script: |
-          # Step inside the exported project so the profile engine maps to your .xcodeproj setup
           cd ios
           xcode-project use-profiles --archive-method app-store
+
+      - name: Patch Export Options Plist Format
+        script: |
+          # Fix Codemagic/Godot array vs dictionary plist decoder mismatch
+          python3 -c "
+          import os, plistlib
+          plist_path = '/Users/builder/export_options.plist'
+          if os.path.exists(plist_path):
+              with open(plist_path, 'rb') as f:
+                  pl = plistlib.load(f)
+              
+              if 'provisioningProfiles' in pl and isinstance(pl['provisioningProfiles'], list):
+                  print('Found provisioningProfiles formatting issue (Array). Converting to Dictionary...')
+                  profile_value = pl['provisioningProfiles'][0] if pl['provisioningProfiles'] else ''
+                  pl['provisioningProfiles'] = {
+                      'com.kickupkings.kickupkings': profile_value
+                  }
+                  with open(plist_path, 'wb') as f:
+                      plistlib.dump(pl, f)
+                  print('Successfully patched export_options.plist format!')
+          else:
+              print('export_options.plist not generated yet or missing.')
+          "
 
       - name: Build and Sign Production iOS Archive
         script: |
@@ -32,7 +72,7 @@ workflows:
           if [ -z "$XCODEPROJ" ]; then echo "No xcodeproj found"; exit 1; fi
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-          # 1. Compile the archive using the default project settings to bypass conflicts
+          # 1. Compile the archive 
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
@@ -40,7 +80,7 @@ workflows:
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
             archive
 
-          # 2. Export and overwrite the signature using Codemagic's valid distribution options plist
+          # 2. Export the production IPA
           xcodebuild \
             -exportArchive \
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
