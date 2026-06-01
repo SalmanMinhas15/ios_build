@@ -72,15 +72,24 @@ workflows:
           if [ -z "$XCODEPROJ" ]; then echo "No xcodeproj found"; exit 1; fi
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-          # 1. Compile the archive 
+          # 1. Dynamically extract the Provisioning Profile UUID downloaded by Codemagic
+          PROV_PROFILE_UUID=$(grep -A1 "provisioningProfiles" /Users/builder/export_options.plist | grep "<string>" | sed -E 's/<\/?string>//g' | tr -d '[:space:]')
+          
+          echo "Extracted Profile UUID for build override: $PROV_PROFILE_UUID"
+
+          # 2. Compile the archive while forcing parameters directly into xcodebuild flags
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
             -configuration Release \
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
+            DEVELOPMENT_TEAM="9WY9B7WP2D" \
+            CODE_SIGN_STYLE="Manual" \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROV_PROFILE_UUID" \
             archive
 
-          # 2. Export the production IPA
+          # 3. Export the production IPA
           xcodebuild \
             -exportArchive \
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
