@@ -6,7 +6,7 @@ workflows:
     environment:
       xcode: latest
       groups:
-        - app_store_credentials 
+        - app_store_credentials
       vars:
         XCODE_BUNDLE_IDENTIFIER: "com.kickupkings.kickupkings"
 
@@ -20,18 +20,19 @@ workflows:
 
       - name: Sanitize Xcode Project Signing Settings
         script: |
-          # Force the project to use Manual signing to align with Apple Distribution certificates
           python3 -c "
-          import os
+          import os, re
           pbx_path = 'ios/build.xcodeproj/project.pbxproj'
           if os.path.exists(pbx_path):
               with open(pbx_path, 'r') as f:
                   text = f.read()
+              # Fix both quoted and unquoted variants
               text = text.replace('CODE_SIGN_STYLE = \"Automatic\";', 'CODE_SIGN_STYLE = \"Manual\";')
+              text = text.replace('CODE_SIGN_STYLE = Automatic;', 'CODE_SIGN_STYLE = Manual;')
               text = text.replace('ProvisioningStyle = Automatic;', 'ProvisioningStyle = Manual;')
               with open(pbx_path, 'w') as f:
                   f.write(text)
-              print('Successfully converted project configurations to Manual Signing Style.')
+              print('Successfully converted to Manual Signing.')
           else:
               print('Error: project.pbxproj not found!')
           "
@@ -41,29 +42,6 @@ workflows:
           cd ios
           xcode-project use-profiles --archive-method app-store
 
-      - name: Patch Export Options Plist Format
-        script: |
-          # Fix Codemagic/Godot array vs dictionary plist decoder mismatch
-          python3 -c "
-          import os, plistlib
-          plist_path = '/Users/builder/export_options.plist'
-          if os.path.exists(plist_path):
-              with open(plist_path, 'rb') as f:
-                  pl = plistlib.load(f)
-              
-              if 'provisioningProfiles' in pl and isinstance(pl['provisioningProfiles'], list):
-                  print('Found provisioningProfiles formatting issue (Array). Converting to Dictionary...')
-                  profile_value = pl['provisioningProfiles'][0] if pl['provisioningProfiles'] else ''
-                  pl['provisioningProfiles'] = {
-                      'com.kickupkings.kickupkings': profile_value
-                  }
-                  with open(plist_path, 'wb') as f:
-                      plistlib.dump(pl, f)
-                  print('Successfully patched export_options.plist format!')
-          else:
-              print('export_options.plist not generated yet or missing.')
-          "
-
       - name: Build and Sign Production iOS Archive
         script: |
           cd ios
@@ -72,12 +50,40 @@ workflows:
           if [ -z "$XCODEPROJ" ]; then echo "No xcodeproj found"; exit 1; fi
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-          # 1. Dynamically extract the Provisioning Profile UUID downloaded by Codemagic
-          PROV_PROFILE_UUID=$(grep -A1 "provisioningProfiles" /Users/builder/export_options.plist | grep "<string>" | sed -E 's/<\/?string>//g' | tr -d '[:space:]')
-          
-          echo "Extracted Profile UUID for build override: $PROV_PROFILE_UUID"
+          # Extract the provisioning profile UUID that use-profiles already
+          # installed into ~/Library/MobileDevice/Provisioning Profiles/
+          PROV_PROFILE_UUID=$(
+            python3 -c "
+          import plistlib, glob, os
+          profiles = glob.glob(os.path.expanduser(
+              '~/Library/MobileDevice/Provisioning Profiles/*.mobileprovision'))
+          bundle_id = 'com.kickupkings.kickupkings'
+          for p in profiles:
+              try:
+                  with open(p, 'rb') as f:
+                      raw = f.read()
+                  # Extract the plist XML embedded in the mobileprovision
+                  start = raw.index(b'<?xml')
+                  end   = raw.index(b'</plist>') + len(b'</plist>')
+                  pl = plistlib.loads(raw[start:end])
+                  ids = pl.get('Entitlements', {}).get('application-identifier', '')
+                  if bundle_id in ids:
+                      print(pl['UUID'])
+                      break
+              except Exception:
+                  pass
+          "
+          )
 
-          # 2. Compile the archive while forcing parameters directly into xcodebuild flags
+          echo "Resolved Provisioning Profile UUID: $PROV_PROFILE_UUID"
+
+          if [ -z "$PROV_PROFILE_UUID" ]; then
+            echo "ERROR: Could not find a provisioning profile for $XCODE_BUNDLE_IDENTIFIER"
+            echo "Installed profiles:"
+            ls ~/Library/MobileDevice/Provisioning\ Profiles/ || true
+            exit 1
+          fi
+
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
@@ -89,7 +95,28 @@ workflows:
             PROVISIONING_PROFILE_SPECIFIER="$PROV_PROFILE_UUID" \
             archive
 
-          # 3. Export the production IPA
+      - name: Export Production IPA
+        script: |
+          # Patch export_options.plist if provisioningProfiles is an array
+          python3 -c "
+          import os, plistlib
+          plist_path = '/Users/builder/export_options.plist'
+          if not os.path.exists(plist_path):
+              print('export_options.plist not found — skipping patch')
+          else:
+              with open(plist_path, 'rb') as f:
+                  pl = plistlib.load(f)
+              if isinstance(pl.get('provisioningProfiles'), list):
+                  print('Fixing provisioningProfiles: Array -> Dictionary')
+                  vals = pl['provisioningProfiles']
+                  pl['provisioningProfiles'] = {
+                      'com.kickupkings.kickupkings': vals[0] if vals else ''
+                  }
+                  with open(plist_path, 'wb') as f:
+                      plistlib.dump(pl, f)
+                  print('Patched.')
+          "
+
           xcodebuild \
             -exportArchive \
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
@@ -97,4 +124,4 @@ workflows:
             -exportOptionsPlist /Users/builder/export_options.plist
 
     artifacts:
-      - ios/output/*.ipa
+      - $CM_BUILD_DIR/output/*.ipa
