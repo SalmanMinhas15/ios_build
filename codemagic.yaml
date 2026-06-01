@@ -6,7 +6,7 @@ workflows:
     environment:
       xcode: latest
       groups:
-        - app_store_credentials 
+        - app_store_credentials # <-- DOUBLE CHECK THIS MATCHES YOUR DASHBOARD GROUP NAME
       vars:
         XCODE_BUNDLE_IDENTIFIER: "com.kickupkings.kickupkings"
 
@@ -18,6 +18,15 @@ workflows:
         script: |
           xcode-project use-profiles --archive-method app-store
 
+      - name: Force Clear Godot Hardcoded Signing
+        script: |
+          cd ios
+          XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
+          
+          # Forcefully strips any restrictive "iOS Distribution" strings out of Godot's project configurations
+          sed -i '' 's/CODE_SIGN_IDENTITY = "iPhone Distribution";/CODE_SIGN_IDENTITY = "Apple Distribution";/g' "$XCODEPROJ/project.pbxproj" || true
+          sed -i '' 's/CODE_SIGN_IDENTITY\[sdk=iphoneos\*\] = "iPhone Distribution";/CODE_SIGN_IDENTITY = "Apple Distribution";/g' "$XCODEPROJ/project.pbxproj" || true
+
       - name: Build and Sign Production iOS Archive
         script: |
           cd ios
@@ -26,15 +35,18 @@ workflows:
           if [ -z "$XCODEPROJ" ]; then echo "No xcodeproj found"; exit 1; fi
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-          # 1. Archive the project using individual production signing configurations
+          # 1. Archive the project using explicit build flags that override the project file
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
             -configuration Release \
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGNING_REQUIRED=YES \
             archive
 
-          # 2. Generate ExportOptions.plist using "Apple Distribution" instead of organization styles
+          # 2. Generate clean ExportOptions without hardcoded name limitations
           cat <<'EOF' > ExportOptions.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -46,8 +58,6 @@ workflows:
               <string>9WY9B7WP2D</string>
               <key>signingStyle</key>
               <string>manual</string>
-              <key>signingCertificate</key>
-              <string>Apple Distribution</string>
               <key>stripSwiftSymbols</key>
               <true/>
               <key>compileBitcode</key>
@@ -61,10 +71,10 @@ workflows:
           </plist>
           EOF
 
-          # Inject the explicit provisioning profile UUID pulled by Codemagic
+          # Inject the dynamic provisioning profile UUID
           sed -i '' "s/PROVISIONING_PROFILE_PLACEHOLDER/$CM_PROVISIONING_PROFILE_UUID/" ExportOptions.plist
 
-          # 3. Final Export Execution
+          # 3. Export execution
           xcodebuild \
             -exportArchive \
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
