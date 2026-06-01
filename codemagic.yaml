@@ -7,6 +7,9 @@ workflows:
       xcode: latest
       groups:
         - app_store_credentials 
+      # Instructs Codemagic to fetch the matching certificates uploaded to your dashboard
+      vars:
+        XCODE_BUNDLE_IDENTIFIER: "com.kickupkings.kickupkings" # <-- REPLACE WITH YOUR ACTUAL GODOT IOS BUNDLE ID
 
     scripts:
       - name: Show files
@@ -14,7 +17,8 @@ workflows:
 
       - name: Set up code signing
         script: |
-          xcode-project use-profiles
+          # Automatically pulls your uploaded profiles/certificates and maps them to your project
+          xcode-project use-profiles --archive-method app-store
 
       - name: Build and Sign Production iOS Archive
         script: |
@@ -24,7 +28,7 @@ workflows:
           if [ -z "$XCODEPROJ" ]; then echo "No xcodeproj found"; exit 1; fi
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-          # 1. Archive the project
+          # 1. Clean and Archive the project using the mapped credentials
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
@@ -32,32 +36,12 @@ workflows:
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
             archive
 
-          # 2. Automatically generate the ExportOptions.plist file with your Team ID
-          cat <<EOF > ExportOptions.plist
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>app-store-connect</string>
-              <key>teamID</key>
-              <string>9WY9B7WP2D</string>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>stripSwiftSymbols</key>
-              <true/>
-              <key>compileBitcode</key>
-              <false/>
-          </dict>
-          </plist>
-          EOF
-
-          # 3. Export the Archive into a true production .ipa package using our new file
+          # 2. Export using the exact ExportOptions profile Codemagic safely generated in step 2
           xcodebuild \
             -exportArchive \
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
             -exportPath "$CM_BUILD_DIR/output" \
-            -exportOptionsPlist ExportOptions.plist
+            -exportOptionsPlist /Users/builder/export_options.plist
 
     artifacts:
       - output/*.ipa
