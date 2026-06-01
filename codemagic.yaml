@@ -5,14 +5,12 @@ workflows:
 
     environment:
       xcode: latest
-      # Codemagic automatically injects your certificates into the build environment
       groups:
-        - app_store_credentials # Change this if you grouped your dashboard variables 
+        - app_store_credentials 
 
     scripts:
       - name: Set up code signing
         script: |
-          # Codemagic automatically initializes the keychain with uploaded certificates
           xcode-project use-profiles
 
       - name: Build and Sign Production iOS Archive
@@ -23,7 +21,7 @@ workflows:
           if [ -z "$XCODEPROJ" ]; then echo "No xcodeproj found"; exit 1; fi
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-          # 1. Clean and Archive the project using official certificates
+          # 1. Archive the project (This succeeded!)
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
@@ -31,7 +29,25 @@ workflows:
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
             archive
 
-          # 2. Export the Archive out into a true production .ipa package
+          # 2. Automatically generate the missing ExportOptions.plist file
+          cat <<EOF > ExportOptions.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>stripSwiftSymbols</key>
+              <true/>
+              <key>compileBitcode</key>
+              <false/>
+          </dict>
+          </plist>
+          EOF
+
+          # 3. Export the Archive into a true production .ipa package using our new file
           xcodebuild \
             -exportArchive \
             -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
