@@ -1,41 +1,42 @@
 workflows:
   ios-build:
-    name: Godot iOS Signed Build
-    max_build_duration: 90
+    name: Godot iOS Signed Production Build
+    max_build_duration: 60
 
     environment:
       xcode: latest
+      # Codemagic automatically injects your certificates into the build environment
+      groups:
+        - app_store_credentials # Change this if you grouped your dashboard variables 
 
     scripts:
-      - name: Show project files
-        script: ls -R
+      - name: Set up code signing
+        script: |
+          # Codemagic automatically initializes the keychain with uploaded certificates
+          xcode-project use-profiles
 
-      - name: Build iOS project (Archive)
+      - name: Build and Sign Production iOS Archive
         script: |
           cd ios
 
           XCODEPROJ=$(find . -name "*.xcodeproj" | head -n 1)
-
-          if [ -z "$XCODEPROJ" ]; then
-            echo "No xcodeproj found"
-            exit 1
-          fi
-
+          if [ -z "$XCODEPROJ" ]; then echo "No xcodeproj found"; exit 1; fi
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
 
-          echo "Project: $XCODEPROJ"
-          echo "Scheme: $SCHEME"
-
-          xcodebuild clean
-
+          # 1. Clean and Archive the project using official certificates
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
             -configuration Release \
-            -destination generic/platform=iOS \
-            -allowProvisioningUpdates \
-            -archivePath "$CM_BUILD_DIR/build/App.xcarchive" \
+            -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
             archive
 
+          # 2. Export the Archive out into a true production .ipa package
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$CM_BUILD_DIR/GodotGame.xcarchive" \
+            -exportPath "$CM_BUILD_DIR/output" \
+            -exportOptionsPlist ExportOptions.plist
+
     artifacts:
-      - build/ipa/*.ipa
+      - output/*.ipa
